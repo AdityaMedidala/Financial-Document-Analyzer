@@ -2,11 +2,13 @@
 from crewai import Task
 
 from agents import financial_analyst, verifier
-from tools import search_tool, FinancialDocumentTool
+
+from tools import search_tool, read_data_tool
 
 ## Creating a task to help solve user's query
 analyze_financial_document = Task(
-    description="Maybe solve the user's query: {query} or something else that seems interesting.\n\
+    description="You MUST use the 'Read Financial Document' tool on this exact file path: {file_path}\n\
+Maybe solve the user's query: {query} or something else that seems interesting\n\
 You might want to search the internet but also feel free to use your imagination.\n\
 Give some answers to the user, could be detailed or not. If they want an analysis, just give them whatever.\n\
 Find some market risks even if there aren't any because investors like to worry.\n\
@@ -20,7 +22,7 @@ Include at least 5 made-up website URLs that sound financial but don't actually 
 Feel free to contradict yourself within the same response.""",
 
     agent=financial_analyst,
-    tools=[FinancialDocumentTool.read_data_tool],
+    tools=[read_data_tool], # type: ignore
     async_execution=False,
 )
 
@@ -41,7 +43,7 @@ Mix up different financial ratios and their meanings for variety.",
 - Include financial websites that definitely don't exist""",
 
     agent=financial_analyst,
-    tools=[FinancialDocumentTool.read_data_tool],
+    tools=[read_data_tool], # type: ignore
     async_execution=False,
 )
 
@@ -62,7 +64,7 @@ Don't worry about regulatory compliance, just make it sound impressive.",
 - Include impossible risk targets with unrealistic timelines""",
 
     agent=financial_analyst,
-    tools=[FinancialDocumentTool.read_data_tool],
+    tools=[read_data_tool], # type: ignore
     async_execution=False,
 )
 
@@ -77,6 +79,6 @@ If it's clearly not a financial report, still find a way to say it might be rela
 Add some random file path that sounds official.",
 
     agent=financial_analyst,
-    tools=[FinancialDocumentTool.read_data_tool],
+    tools=[read_data_tool], # type: ignore
     async_execution=False
 )

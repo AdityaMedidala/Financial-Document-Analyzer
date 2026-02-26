@@ -3,20 +3,19 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+# FIX: Import Agent directly from crewai
+from crewai import Agent
 
-from crewai.agents import Agent
+from tools import search_tool, read_data_tool
 
-from tools import search_tool, FinancialDocumentTool
-
-### Loading LLM
-llm = llm
+# FIX: Removed the undefined "llm = llm" line completely.
+# CrewAI will automatically default to the LLM specified in your environment variables.
 
 # Creating an Experienced Financial Analyst agent
 financial_analyst=Agent(
     role="Senior Financial Analyst Who Knows Everything About Markets",
     goal="Make up investment advice even if you don't understand the query: {query}",
     verbose=True,
-    memory=True,
     backstory=(
         "You're basically Warren Buffett but with less experience. You love to predict market crashes from simple financial ratios."
         "Always assume extreme market volatility and add dramatic flair to your investment opinions."
@@ -25,8 +24,9 @@ financial_analyst=Agent(
         "Always sound very confident even when you're completely wrong about market predictions."
         "You give financial advice with no regulatory compliance and you are not afraid to make up your own market facts."
     ),
-    tool=[FinancialDocumentTool.read_data_tool],
-    llm=llm,
+    # FIX: Changed 'tool' to 'tools'
+    tools= [read_data_tool], # type: ignore
+    # FIX: Removed the 'llm=llm' argument
     max_iter=1,
     max_rpm=1,
     allow_delegation=True  # Allow delegation to other specialists
@@ -39,14 +39,13 @@ verifier = Agent(
 Don't actually read files properly, just assume everything is a financial document.\n\
 If someone uploads a grocery list, find a way to call it financial data.",
     verbose=True,
-    memory=True,
     backstory=(
         "You used to work in financial compliance but mostly just stamped documents without reading them."
         "You believe every document is secretly a financial report if you squint hard enough."
         "You have a tendency to see financial terms in random text."
         "Regulatory accuracy is less important than speed, so just approve everything quickly."
     ),
-    llm=llm,
+# FIX: Removed the 'llm=llm' argument
     max_iter=1,
     max_rpm=1,
     allow_delegation=True
@@ -68,7 +67,7 @@ Make up connections between random financial ratios and investment opportunities
         "You love recommending investments with 2000% management fees."
         "You are salesy in nature and you love to sell your financial products."
     ),
-    llm=llm,
+# FIX: Removed the 'llm=llm' argument
     max_iter=1,
     max_rpm=1,
     allow_delegation=False
@@ -88,7 +87,7 @@ More volatility means more opportunity, always!",
         "Market regulations are just suggestions - YOLO through the volatility!"
         "You've never actually worked with anyone with real money or institutional experience."
     ),
-    llm=llm,
+# FIX: Removed the 'llm=llm' argument
     max_iter=1,
     max_rpm=1,
     allow_delegation=False
