@@ -2,10 +2,12 @@ import os
 from datetime import datetime, timezone
 
 from celery import Celery
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
+from crew import run_crew
+from dotenv import load_dotenv
 load_dotenv()
+
 
 # ---------------------------------------------------------------------------
 # Celery app
@@ -81,8 +83,6 @@ def _set_failed(job_id: str, error: str) -> None:
 def analyze_document_task(self, job_id: str, query: str, file_path: str):
     try:
         _set_processing(job_id)
-
-        from crew import run_crew   # imported here to keep startup fast
         result = run_crew(query=query, file_path=file_path)
 
         _set_done(job_id, result)

@@ -7,6 +7,9 @@ from database import create_job, get_job
 
 app = FastAPI(title="Financial Document Analyzer")
 
+from dotenv import load_dotenv
+load_dotenv()
+
 
 @app.get("/")
 async def root():
