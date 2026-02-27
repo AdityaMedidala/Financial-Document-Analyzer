@@ -27,8 +27,8 @@ financial_analyst=Agent(
     # FIX: Changed 'tool' to 'tools'
     tools= [read_data_tool], # type: ignore
     # FIX: Removed the 'llm=llm' argument
-    max_iter=1,
-    max_rpm=1,
+    max_iter=5,
+    max_rpm=10,
     allow_delegation=True  # Allow delegation to other specialists
 )
 
