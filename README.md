@@ -45,12 +45,12 @@ flowchart TD
 
     subgraph CrewAI ["CrewAI Pipeline (sequential)"]
         A1["1. Senior Financial Analyst\n─ read_data_tool\n─ search_tool (Serper)"]
-        A2["2. Financial Verifier\n─ no tools, reads context"]
-        A3["3. Investment Advisor\n─ read_data_tool"]
-        A4["4. Risk Assessor\n─ read_data_tool"]
+        A2["2. Investment Advisor\n─ read_data_tool"]
+        A3["3. Risk Assessor\n─ read_data_tool"]
+        A4["4. Financial Verifier\n─ no tools, reads context"]
         A1 --> A2 --> A3 --> A4
     end
-
+    
     CrewAI -->|save result| MongoDB
     Client -->|GET /results/job_id| MongoDB
 ```
