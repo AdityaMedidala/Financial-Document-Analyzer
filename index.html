@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinDoc Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #090b0e;
+      --surface:  #0f1318;
+      --border:   #1e2530;
+      --border2:  #2a3340;
+      --amber:    #f5a623;
+      --amber-dim:#8a5c12;
+      --green:    #3ddc84;
+      --red:      #ff4d4d;
+      --blue:     #4a9eff;
+      --text:     #e2e8f0;
+      --muted:    #5a6a7e;
+      --mono:     'JetBrains Mono', monospace;
+      --display:  'Syne', sans-serif;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); }
+
+    /* ── Scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.03) 2px, rgba(0,0,0,.03) 4px);
+    }
+
+    /* ── Layout ── */
+    .app { display: grid; grid-template-rows: 56px 1fr; height: 100vh; overflow: hidden; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    header::after {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--amber), transparent);
+      opacity: .4;
+    }
+    .logo {
+      font-family: var(--display); font-size: 17px; font-weight: 800;
+      letter-spacing: -.01em;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo-mark {
+      width: 28px; height: 28px; border: 1.5px solid var(--amber);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: var(--amber);
+      font-family: var(--mono);
+      position: relative;
+    }
+    .logo-mark::before {
+      content: '';
+      position: absolute; inset: 3px;
+      background: var(--amber); opacity: .12;
+    }
+    .header-meta { font-size: 10px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--muted); letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Main grid ── */
+    main {
+      display: grid; grid-template-columns: 380px 1fr;
+      overflow: hidden;
+    }
+
+    /* ── Panel shared ── */
+    .panel {
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .panel-title {
+      font-size: 9px; font-weight: 600;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+    }
+    .panel-badge {
+      font-size: 9px; padding: 2px 7px;
+      border: 1px solid var(--border2); color: var(--muted);
+      letter-spacing: .06em;
+    }
+
+    /* ── LEFT panel ── */
+    .left-panel { border-right: 1px solid var(--border); background: var(--surface); }
+    .left-panel .panel-body { padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; flex: 1; }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 1px dashed var(--border2);
+      padding: 32px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      cursor: pointer; transition: all .2s ease;
+      position: relative; overflow: hidden;
+      background: rgba(245,166,35,.02);
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--amber);
+      background: rgba(245,166,35,.05);
+    }
+    .drop-zone.has-file { border-color: var(--green); background: rgba(61,220,132,.04); }
+    .drop-zone input[type="file"] { display: none; }
+    .drop-icon {
+      width: 40px; height: 40px;
+      border: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      transition: border-color .2s;
+    }
+    .drop-zone:hover .drop-icon, .drop-zone.drag-over .drop-icon { border-color: var(--amber); }
+    .drop-zone.has-file .drop-icon { border-color: var(--green); }
+    .drop-label { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.6; }
+    .drop-label strong { color: var(--text); display: block; font-size: 12px; margin-bottom: 2px; }
+    .file-name {
+      font-size: 11px; color: var(--green); word-break: break-all;
+      text-align: center; display: none;
+    }
+    .drop-zone.has-file .file-name { display: block; }
+    .drop-zone.has-file .drop-label { display: none; }
+
+    /* ── Form fields ── */
+    label.field-label {
+      font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--muted); display: block; margin-bottom: 8px;
+    }
+    textarea {
+      width: 100%; background: var(--bg);
+      border: 1px solid var(--border2); color: var(--text);
+      font-family: var(--mono); font-size: 12px; line-height: 1.6;
+      padding: 12px 14px; resize: vertical; min-height: 90px;
+      outline: none; transition: border-color .2s;
+    }
+    textarea:focus { border-color: var(--amber); }
+    textarea::placeholder { color: var(--muted); }
+
+    /* ── Preset chips ── */
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+    .preset-chip {
+      font-size: 10px; padding: 4px 10px;
+      border: 1px solid var(--border2); color: var(--muted);
+      cursor: pointer; transition: all .15s;
+      background: none; font-family: var(--mono);
+    }
+    .preset-chip:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* ── Submit button ── */
+    .run-btn {
+      width: 100%; padding: 13px;
+      background: var(--amber); color: #000;
+      border: none; font-family: var(--mono); font-weight: 700;
+      font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+      cursor: pointer; transition: all .2s; position: relative; overflow: hidden;
+    }
+    .run-btn::before {
+      content: ''; position: absolute; top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: rgba(255,255,255,.15);
+      transition: left .3s ease;
+    }
+    .run-btn:hover::before { left: 100%; }
+    .run-btn:hover { background: #ffc04a; }
+    .run-btn:disabled { background: var(--border2); color: var(--muted); cursor: not-allowed; }
+    .run-btn:disabled::before { display: none; }
+
+    /* ── Config row ── */
+    .config-row { display: flex; align-items: center; gap: 10px; }
+    .api-input {
+      flex: 1; background: var(--bg);
+      border: 1px solid var(--border); color: var(--muted);
+      font-family: var(--mono); font-size: 10px;
+      padding: 6px 10px; outline: none; transition: border-color .2s;
+    }
+    .api-input:focus { border-color: var(--amber); color: var(--text); }
+
+    /* ── RIGHT panel — output ── */
+    .right-panel { background: var(--bg); }
+    .right-panel .panel-body { flex: 1; overflow-y: auto; padding: 0; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%;
+      gap: 16px; padding: 40px;
+    }
+    .empty-grid {
+      display: grid; grid-template-columns: repeat(8, 1fr);
+      gap: 6px; opacity: .06;
+    }
+    .empty-grid-cell { width: 24px; height: 24px; border: 1px solid var(--text); }
+    .empty-text { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.8; letter-spacing: .04em; }
+    .empty-text strong { display: block; color: var(--border2); font-size: 28px; font-family: var(--display); font-weight: 800; margin-bottom: 8px; letter-spacing: -.02em; }
+
+    /* ── Progress bar ── */
+    .progress-wrap { padding: 24px 28px 0; display: none; }
+    .progress-wrap.visible { display: block; }
+    .progress-label {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+    }
+    .progress-label-text { font-size: 10px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+    .progress-label-status { font-size: 10px; color: var(--amber); }
+    .progress-bar-track {
+      height: 2px; background: var(--border);
+      position: relative; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; background: var(--amber);
+      width: 0%; transition: width .6s ease;
+      position: relative;
+    }
+    .progress-bar-fill::after {
+      content: ''; position: absolute; right: 0; top: -2px;
+      width: 4px; height: 6px;
+      background: #fff; opacity: .8;
+    }
+
+    /* ── Agent steps ── */
+    .steps-wrap { padding: 20px 28px; display: none; }
+    .steps-wrap.visible { display: block; }
+    .steps { display: flex; flex-direction: column; gap: 0; }
+    .step {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 10px 0;
+      position: relative;
+      opacity: .35; transition: opacity .4s;
+    }
+    .step.active { opacity: 1; }
+    .step.done { opacity: .7; }
+    .step::before {
+      content: ''; position: absolute; left: 10px; top: 30px;
+      width: 1px; height: calc(100% - 10px);
+      background: var(--border);
+    }
+    .step:last-child::before { display: none; }
+    .step-dot {
+      width: 22px; height: 22px; border: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: var(--muted); flex-shrink: 0;
+      font-weight: 600; transition: all .3s;
+    }
+    .step.active .step-dot { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 8px rgba(245,166,35,.3); }
+    .step.done .step-dot { border-color: var(--green); color: var(--green); background: rgba(61,220,132,.08); }
+    .step-info { padding-top: 2px; }
+    .step-name { font-size: 11px; font-weight: 600; color: var(--text); }
+    .step-desc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .step.active .step-name { color: var(--amber); }
+
+    /* ── Result output ── */
+    .result-wrap { padding: 24px 28px; display: none; }
+    .result-wrap.visible { display: block; }
+
+    .result-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .result-title { font-family: var(--display); font-size: 15px; font-weight: 700; }
+    .result-meta { font-size: 10px; color: var(--muted); }
+
+    .result-section { margin-bottom: 24px; }
+    .result-section-label {
+      font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--amber); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .result-section-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .result-text {
+      font-size: 12px; line-height: 1.8; color: var(--text);
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .result-text p { margin-bottom: .75em; }
+
+    /* ── Error state ── */
+    .error-wrap {
+      padding: 24px 28px; display: none;
+      flex-direction: column; gap: 10px;
+    }
+    .error-wrap.visible { display: flex; }
+    .error-box {
+      border: 1px solid var(--red); padding: 16px 18px;
+      background: rgba(255,77,77,.04);
+    }
+    .error-label { font-size: 9px; color: var(--red); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; }
+    .error-msg { font-size: 11px; color: var(--text); line-height: 1.6; }
+
+    /* ── Token stats ── */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 1px; background: var(--border);
+      margin-bottom: 24px;
+    }
+    .stat-cell {
+      background: var(--surface); padding: 12px 16px;
+    }
+    .stat-value { font-size: 18px; font-weight: 600; color: var(--amber); font-family: var(--display); }
+    .stat-label { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-top: 3px; }
+
+    /* ── Copy button ── */
+    .copy-btn {
+      background: none; border: 1px solid var(--border2);
+      color: var(--muted); font-family: var(--mono); font-size: 10px;
+      padding: 4px 10px; cursor: pointer; transition: all .15s;
+      letter-spacing: .06em;
+    }
+    .copy-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ── Animations ── */
+    @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
+    .fade-in { animation: fadeIn .4s ease forwards; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 1.5px solid var(--border2);
+      border-top-color: var(--amber);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">F</div>
+      FinDoc Analyzer
+    </div>
+    <div class="header-meta">CrewAI · GPT-4o-mini · SerperDev</div>
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      API Ready
+    </div>
+  </header>
+
+  <!-- ── Main ── -->
+  <main>
+
+    <!-- ── LEFT: Input panel ── -->
+    <div class="panel left-panel">
+      <div class="panel-header">
+        <span class="panel-title">Input</span>
+        <span class="panel-badge">PDF · Form</span>
+      </div>
+      <div class="panel-body">
+
+        <!-- API URL config -->
+        <div>
+          <label class="field-label">API Endpoint</label>
+          <div class="config-row">
+            <input class="api-input" id="apiBase" type="text" value="http://localhost:8000" spellcheck="false" />
+          </div>
+        </div>
+
+        <!-- Drop zone -->
+        <div>
+          <label class="field-label">Financial Document</label>
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".pdf" />
+            <div class="drop-icon">📄</div>
+            <div class="drop-label">
+              <strong>Drop PDF here</strong>
+              or click to browse
+            </div>
+            <div class="file-name" id="fileName">—</div>
+          </div>
+        </div>
+
+        <!-- Query -->
+        <div>
+          <label class="field-label">Query</label>
+          <textarea id="queryInput" placeholder="What are the key financial risks?&#10;Summarize revenue growth and margins.&#10;Is this a good investment opportunity?" rows="4"></textarea>
+        </div>
+
+        <!-- Presets -->
+        <div>
+          <label class="field-label">Quick Queries</label>
+          <div class="presets">
+            <button class="preset-chip" onclick="setQuery('Summarize the key financial highlights')">Key highlights</button>
+            <button class="preset-chip" onclick="setQuery('What are the main risk factors disclosed?')">Risk factors</button>
+            <button class="preset-chip" onclick="setQuery('Analyze revenue growth and profit margins')">Revenue & margins</button>
+            <button class="preset-chip" onclick="setQuery('What are the investment considerations?')">Investment view</button>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button class="run-btn" id="runBtn" onclick="submitAnalysis()">
+          ▶ &nbsp;Run Analysis
+        </button>
+
+      </div>
+    </div>
+
+    <!-- ── RIGHT: Output panel ── -->
+    <div class="panel right-panel">
+      <div class="panel-header">
+        <span class="panel-title">Output</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="jobIdBadge" class="panel-badge" style="display:none"></span>
+          <button class="copy-btn" id="copyBtn" style="display:none" onclick="copyResult()">Copy</button>
+        </div>
+      </div>
+
+      <div class="panel-body" id="outputPanel">
+
+        <!-- Empty state -->
+        <div class="empty-state" id="emptyState">
+          <div class="empty-grid">
+            <div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div>
+            <div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div>
+            <div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div>
+            <div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div><div class="empty-grid-cell"></div>
+          </div>
+          <div class="empty-text">
+            <strong>Awaiting Input</strong>
+            Upload a financial PDF and enter a query.<br/>
+            Four AI agents will analyze the document<br/>
+            and return a grounded report.
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-label">
+            <span class="progress-label-text">Processing</span>
+            <span class="progress-label-status" id="progressStatus">Queued</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progressFill"></div>
+          </div>
+        </div>
+
+        <!-- Steps -->
+        <div class="steps-wrap" id="stepsWrap">
+          <div class="steps">
+            <div class="step" id="step-0">
+              <div class="step-dot">01</div>
+              <div class="step-info">
+                <div class="step-name">Senior Financial Analyst</div>
+                <div class="step-desc">Reading document · Fetching market context</div>
+              </div>
+            </div>
+            <div class="step" id="step-1">
+              <div class="step-dot">02</div>
+              <div class="step-info">
+                <div class="step-name">Financial Verifier</div>
+                <div class="step-desc">Checking for hallucinations · Validating claims</div>
+              </div>
+            </div>
+            <div class="step" id="step-2">
+              <div class="step-dot">03</div>
+              <div class="step-info">
+                <div class="step-name">Investment Advisor</div>
+                <div class="step-desc">Extracting metrics · Investment observations</div>
+              </div>
+            </div>
+            <div class="step" id="step-3">
+              <div class="step-dot">04</div>
+              <div class="step-info">
+                <div class="step-name">Risk Assessor</div>
+                <div class="step-desc">Identifying documented risk factors</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div class="error-wrap" id="errorWrap">
+          <div class="error-box">
+            <div class="error-label">Error</div>
+            <div class="error-msg" id="errorMsg">—</div>
+          </div>
+        </div>
+
+        <!-- Result -->
+        <div class="result-wrap" id="resultWrap">
+          <div class="result-header">
+            <div class="result-title">Analysis Complete</div>
+            <div class="result-meta" id="resultMeta">—</div>
+          </div>
+
+          <div class="stats-row" id="statsRow">
+            <div class="stat-cell">
+              <div class="stat-value" id="statAgents">4</div>
+              <div class="stat-label">Agents Run</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-value" id="statTime">—</div>
+              <div class="stat-label">Duration</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-value" id="statWords">—</div>
+              <div class="stat-label">Words</div>
+            </div>
+          </div>
+
+          <div class="result-section">
+            <div class="result-section-label">Full Report</div>
+            <div class="result-text" id="resultText">—</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // -- State --
+  let selectedFile = null;
+  let pollTimer = null;
+  let startTime = null;
+  let currentJobId = null;
+  let pollStep = 0;
+  let pendingPolls = 0;
+
+  const PANEL_DISPLAY = {
+    emptyState: 'flex',
+    progressWrap: 'block',
+    stepsWrap: 'block',
+    resultWrap: 'block',
+    errorWrap: 'flex'
+  };
+
+  // -- File handling --
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const fileName = document.getElementById('fileName');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => setFile(e.target.files[0]));
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (!f) return;
+    const looksLikePdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+    if (looksLikePdf) {
+      setFile(f);
+    } else {
+      showError('Only PDF files are supported.');
+    }
+  });
+
+  function setFile(f) {
+    if (!f) return;
+    selectedFile = f;
+    fileName.textContent = f.name;
+    dropZone.classList.add('has-file');
+  }
+
+  function setQuery(q) {
+    document.getElementById('queryInput').value = q;
+  }
+
+  // -- Submit --
+  async function submitAnalysis() {
+    if (!selectedFile) {
+      showError('No file selected. Please upload a PDF.');
+      return;
+    }
+
+    const query = document.getElementById('queryInput').value.trim();
+    if (!query) {
+      showError('Please enter a query.');
+      return;
+    }
+
+    const base = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
+    const btn = document.getElementById('runBtn');
+
+    if (pollTimer) clearInterval(pollTimer);
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>&nbsp; Submitting...';
+
+    resetOutput();
+    showProgress('Submitting', 5);
+    setStepDescription(0, 'Job is being created in API');
+
+    try {
+      const form = new FormData();
+      form.append('file', selectedFile);
+      form.append('query', query);
+
+      const res = await fetch(`${base}/analyze`, { method: 'POST', body: form });
+      if (!res.ok) {
+        throw new Error(`POST /analyze failed (${res.status}): ${await res.text()}`);
+      }
+
+      const data = await res.json();
+      if (!data.job_id) {
+        throw new Error('API did not return job_id.');
+      }
+
+      currentJobId = data.job_id;
+      document.getElementById('jobIdBadge').textContent = currentJobId.slice(0, 8) + '...';
+      document.getElementById('jobIdBadge').style.display = 'inline-block';
+
+      startTime = Date.now();
+      startPolling(base, currentJobId);
+    } catch (err) {
+      showError(err?.message || String(err));
+      resetBtn();
+    }
+  }
+
+  // -- Polling --
+  function startPolling(base, jobId) {
+    pollStep = 0;
+    pendingPolls = 0;
+
+    poll(base, jobId);
+    pollTimer = setInterval(() => poll(base, jobId), 2500);
+  }
+
+  async function poll(base, jobId) {
+    try {
+      const res = await fetch(`${base}/results/${jobId}`);
+      if (!res.ok) {
+        throw new Error(`GET /results/${jobId} failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      const status = (data.status || '').toLowerCase();
+
+      if (status === 'pending' || status === 'queued') {
+        pendingPolls += 1;
+        activateStep(0);
+        setStepDescription(0, 'Job queued in MongoDB, waiting for Celery worker pickup');
+        showProgress('Queued - waiting for worker', 12);
+
+        if (pendingPolls >= 24) {
+          clearInterval(pollTimer);
+          showError('Job is still pending after 60s. Worker likely not running or not connected to Redis/Mongo.');
+          resetBtn();
+        }
+        return;
+      }
+
+      if (status === 'processing') {
+        pendingPolls = 0;
+        pollStep = Math.min(pollStep + 1, 3);
+        activateStep(pollStep);
+
+        if (pollStep === 1) {
+          setStepDescription(1, 'Worker running Crew task: document verification and grounding checks');
+        }
+        if (pollStep === 2) {
+          setStepDescription(2, 'Worker running investment analysis task');
+        }
+        if (pollStep === 3) {
+          setStepDescription(3, 'Worker running risk assessment task and composing final output');
+        }
+
+        const pct = 25 + pollStep * 18;
+        showProgress('Processing in worker', pct);
+        return;
+      }
+
+      if (status === 'done' || status === 'completed') {
+        clearInterval(pollTimer);
+        for (let i = 0; i < 4; i++) markStepDone(i);
+        showProgress('Complete', 100);
+        setTimeout(() => showResult(data), 350);
+        resetBtn();
+        return;
+      }
+
+      if (status === 'failed') {
+        clearInterval(pollTimer);
+        showError(data.error || 'Worker failed this job. Check worker logs for traceback.');
+        resetBtn();
+        return;
+      }
+
+      activateStep(0);
+      showProgress(`Status: ${status || 'unknown'}`, 15);
+      setStepDescription(0, `Unexpected status received from API: ${status || 'empty'}`);
+    } catch (err) {
+      clearInterval(pollTimer);
+      showError(err?.message || String(err));
+      resetBtn();
+    }
+  }
+
+  // -- UI helpers --
+  function resetOutput() {
+    hide('emptyState');
+    hide('resultWrap');
+    hide('errorWrap');
+    show('progressWrap');
+    show('stepsWrap');
+    document.getElementById('copyBtn').style.display = 'none';
+    document.getElementById('progressFill').style.width = '0%';
+
+    setStepDescription(0, 'Waiting to start');
+    setStepDescription(1, 'Waiting to start');
+    setStepDescription(2, 'Waiting to start');
+    setStepDescription(3, 'Waiting to start');
+
+    for (let i = 0; i < 4; i++) {
+      const step = document.getElementById(`step-${i}`);
+      if (step) step.classList.remove('active', 'done');
+    }
+  }
+
+  function showProgress(label, pct) {
+    document.getElementById('progressStatus').textContent = label;
+    document.getElementById('progressFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
+  }
+
+  function activateStep(idx) {
+    for (let i = 0; i < idx; i++) {
+      markStepDone(i);
+    }
+
+    const step = document.getElementById(`step-${idx}`);
+    if (step) {
+      step.classList.remove('done');
+      step.classList.add('active');
+    }
+  }
+
+  function markStepDone(idx) {
+    const step = document.getElementById(`step-${idx}`);
+    if (step) {
+      step.classList.remove('active');
+      step.classList.add('done');
+    }
+  }
+
+  function setStepDescription(idx, text) {
+    const root = document.getElementById(`step-${idx}`);
+    if (!root) return;
+    const desc = root.querySelector('.step-desc');
+    if (desc) desc.textContent = text;
+  }
+
+  function showResult(data) {
+    hide('progressWrap');
+    hide('stepsWrap');
+    hide('errorWrap');
+    show('resultWrap');
+    document.getElementById('copyBtn').style.display = 'inline-block';
+
+    const elapsedSec = startTime ? Math.round((Date.now() - startTime) / 1000) : null;
+    const text = (data.result || '').trim();
+    const words = text ? text.split(/\s+/).length : 0;
+    const statusText = (data.status || 'done').toUpperCase();
+
+    document.getElementById('resultMeta').textContent = `Job ${currentJobId?.slice(0, 8) || 'N/A'}... | ${statusText}`;
+    document.getElementById('statTime').textContent = elapsedSec == null ? '-' : `${elapsedSec}s`;
+    document.getElementById('statWords').textContent = words.toLocaleString();
+    document.getElementById('resultText').textContent = text || 'No result text returned by worker.';
+
+    document.getElementById('resultWrap').classList.add('fade-in');
+  }
+
+  function showError(msg) {
+    hide('progressWrap');
+    hide('stepsWrap');
+    hide('resultWrap');
+    hide('emptyState');
+    show('errorWrap');
+    document.getElementById('errorMsg').textContent = msg;
+    document.getElementById('errorWrap').classList.add('fade-in');
+  }
+
+  function resetBtn() {
+    const btn = document.getElementById('runBtn');
+    btn.disabled = false;
+    btn.innerHTML = '▶ &nbsp;Run Analysis';
+  }
+
+  function show(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = PANEL_DISPLAY[id] || 'block';
+  }
+
+  function hide(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = 'none';
+  }
+
+  function copyResult() {
+    const text = document.getElementById('resultText').textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+      }, 1500);
+    }).catch(() => {
+      showError('Clipboard write failed. Browser blocked clipboard access.');
+    });
+  }
+</script>
+</body>
+</html>

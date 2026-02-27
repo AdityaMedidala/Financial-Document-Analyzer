@@ -17,16 +17,19 @@ analyze_financial_document = Task(
         "Do not speculate or provide investment advice.",
 
     agent=financial_analyst,
-    tools=[read_data_tool], # type: ignore
+    # Note: tools intentionally NOT set here — agent already has read_data_tool.
+    # Setting tools at task level AND agent level triggers CrewAI's duplicate-input guard.
     async_execution=False,
 )
 
 investment_analysis = Task(
     description=(
-        "Use the 'Read Financial Document' tool ONCE to read the document at {file_path}. "  # ADD THIS
+        "Use the 'Read Financial Document' tool ONCE to read the document at {file_path}. "  
         "Based on the financial analyst's document summary, identify key financial metrics "
         "relevant to investment considerations (e.g. revenue growth, margins, debt levels). "
         "User query: {query}. Ground every observation in the document — no speculation."
+        "Do not call the tool a second time — all the information you need is in the first read."
+
     ),
     expected_output=(
         "A structured investment observation section citing specific figures from the document. "
@@ -38,10 +41,12 @@ investment_analysis = Task(
 
 risk_assessment = Task(
     description=(
-        "Use the 'Read Financial Document' tool ONCE to read the document at {file_path}. "  # ADD THIS
+        "Use the 'Read Financial Document' tool ONCE to read the document at {file_path}. "  
         "Based on the prior analysis, identify risk factors explicitly stated or implied "
         "in the financial document. User query: {query}. "
         "Do not invent risk scenarios not grounded in the document."
+        "Do not call the tool a second time — all the information you need is in the first read."
+
     ),
     expected_output=(
         "A risk summary citing specific document sections or figures. "

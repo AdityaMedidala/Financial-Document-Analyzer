@@ -12,10 +12,6 @@ from langchain_community.document_loaders import PyPDFLoader
 # Fixed SerperDevTool import path for newer crewai_tools versions
 from crewai_tools import SerperDevTool
 
-#added
-load_dotenv()
-
-
 ## Creating search tool
 search_tool = SerperDevTool()
 

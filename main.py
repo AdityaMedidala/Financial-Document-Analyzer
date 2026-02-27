@@ -1,11 +1,19 @@
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import uuid
 
-from crew import run_crew          # moved to crew.py
 from database import create_job, get_job
 
 app = FastAPI(title="Financial Document Analyzer")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -21,11 +29,14 @@ async def api_financial_document(
     file: UploadFile = File(...),
     query: str = Form(default="Analyze this financial document for investment insights"),
 ):
-    job_id    = str(uuid.uuid4())
-    file_path = f"data/financial_document_{job_id}.pdf"
+    job_id = str(uuid.uuid4())
+    # Use absolute path so Celery workers (different cwd) always find the file
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(base_dir, "data")
+    file_path = os.path.join(data_dir, f"financial_document_{job_id}.pdf")
 
     try:
-        os.makedirs("data", exist_ok=True)
+        os.makedirs(data_dir, exist_ok=True)
 
         with open(file_path, "wb") as f:
             content = await file.read()
