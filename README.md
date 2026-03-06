@@ -130,7 +130,7 @@ For MongoDB on Windows: download the MSI installer from [mongodb.com/try/downloa
 ### Install
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/AdityaMedidala/Financial-Document-Analyzer
 cd financial-document-analyzer-debug
 
 python -m venv .venv
